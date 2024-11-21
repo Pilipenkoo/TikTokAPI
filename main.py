@@ -47,10 +47,42 @@ def login(driver):
 
 # Получение списка подписчиков
 def get_followers(driver, username):
-    driver.get(f'https://www.tiktok.com/@{username}/followers')
-    time.sleep(5)  # Ожидание загрузки списка подписчиков
-    followers = driver.find_elements(By.XPATH, "//a[@class='user-info']")  # Убедитесь, что XPATH актуален
-    return {follower.get_attribute("href") for follower in followers}
+    driver.get(f'https://www.tiktok.com/@{username}')
+    try:
+        # Нажимаем на кнопку "Подписчики"
+        subscribe_button = WebDriverWait(driver, 20).until(
+            EC.element_to_be_clickable((By.XPATH, "//span[@data-e2e='followers']"))
+        )
+        subscribe_button.click()
+
+        # Ожидаем загрузки списка подписчиков
+        WebDriverWait(driver, 20).until(
+            EC.presence_of_element_located((By.XPATH, "//div[@data-e2e='user-list']"))
+        )
+
+        # Прокручиваем список подписчиков, чтобы загрузить всех (если их много)
+        scrollable_div = driver.find_element(By.XPATH, "//div[@data-e2e='user-list']")
+        last_height = driver.execute_script("return arguments[0].scrollHeight", scrollable_div)
+
+        while True:
+            driver.execute_script("arguments[0].scrollTop = arguments[0].scrollHeight", scrollable_div)
+            time.sleep(1)  # Небольшая пауза для подгрузки контента
+            new_height = driver.execute_script("return arguments[0].scrollHeight", scrollable_div)
+            if new_height == last_height:
+                break
+            last_height = new_height
+
+        # Собираем элементы подписчиков
+        followers = driver.find_elements(By.XPATH, "//div[@data-e2e='user-item']//a[@data-e2e='user-card-avatar']")
+        follower_urls = {follower.get_attribute("href") for follower in followers}
+        return follower_urls
+
+    except TimeoutException:
+        print("Не удалось загрузить список подписчиков.")
+        return set()
+
+
+
 
 # Отправка сообщения новому подписчику
 def send_message_to_follower(driver, follower_url, message_text):
@@ -93,6 +125,7 @@ def main():
 
     message_text = input("Введите сообщение для новых подписчиков: ")
     username = input('Введите свой логин без @:\n')
+    print("Логин введён")
     known_followers = get_followers(driver, username)
 
     try:
