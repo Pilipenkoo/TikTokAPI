@@ -1,4 +1,5 @@
 # use_cases/follower_management_use_case.py
+import json
 
 import time
 from entities.follower import Follower
@@ -8,42 +9,69 @@ class FollowerManagementUseCase:
     def __init__(self, web_interface: WebInterface):
         self.web_interface = web_interface
 
-    def get_followers(self, username: str):
+    def get_followers(self, username):
         self.web_interface.navigate_to(f'https://www.tiktok.com/@{username}')
         try:
-            locator = {"by": "xpath", "value": "//span[@data-e2e='followers']"}
-            followers_button = self.web_interface.wait_until_clickable(locator, timeout=20)
+            # Нажимаем на кнопку "Подписчики"
+            locator_button = {"by": "xpath", "value": "//span[@data-e2e='followers']"}
+            followers_button = self.web_interface.wait_until_clickable(locator_button, timeout=30)
             self.web_interface.click_element(followers_button)
 
             # Ожидаем загрузки списка подписчиков
-            locator_list = {"by": "xpath", "value": "//div[@data-e2e='user-list']"}
-            self.web_interface.wait_until_present(locator_list, timeout=20)
+            locator_list = {
+                "by": "xpath",
+                "value": "//div[contains(@class, 'DivUserListContainer')]"
+            }
+            scrollable_div = self.web_interface.wait_until_present(locator_list, timeout=30)
 
-            # Прокручиваем список подписчиков
-            scrollable_div = self.web_interface.find_element(locator_list)
-            last_height = self.web_interface.execute_script("return arguments[0].scrollHeight", scrollable_div)
+            # Прокручиваем список и собираем подписчиков
+            followers_set = set()
+            last_count = 0
+            max_attempts = 5
+            attempts = 0
 
             while True:
+                # Прокручиваем вниз
                 self.web_interface.execute_script("arguments[0].scrollTop = arguments[0].scrollHeight", scrollable_div)
-                time.sleep(1)
-                new_height = self.web_interface.execute_script("return arguments[0].scrollHeight", scrollable_div)
-                if new_height == last_height:
-                    break
-                last_height = new_height
+                time.sleep(2)  # Ждем загрузки новых элементов
 
-            # Собираем ссылки на профили подписчиков
-            locator_followers = {
-                "by": "xpath",
-                "value": "//div[@data-e2e='user-item']//a[@data-e2e='user-card-avatar']"
-            }
-            followers_elements = self.web_interface.find_elements(locator_followers)
-            followers = set()
-            for elem in followers_elements:
-                profile_url = elem.get_attribute("href")
-                username = profile_url.split('@')[-1]
-                followers.add(Follower(username, profile_url))
-            return followers
+                # Собираем элементы подписчиков
+                followers_elements = self.web_interface.find_elements({
+                    "by": "xpath",
+                    "value": "//li//a[contains(@class, 'StyledLink-StyledUserInfoLink')]"
+                })
+                current_count = len(followers_elements)
+                # print(followers_elements)
+                # print(f"Найдено {current_count} элементов подписчиков.")
 
-        except Exception:
-            print("Не удалось загрузить список подписчиков.")
+                # Проверяем, достигли ли конца списка
+                if current_count == last_count:
+                    attempts += 1
+                    if attempts >= max_attempts:
+                        break
+                else:
+                    attempts = 0
+                    last_count = current_count
+
+                # Собираем данные о подписчиках
+                for elem in followers_elements:
+
+                    href = elem.get_attribute("href")
+                    print(href)
+                    # print(href)
+                    if href.startswith('https://www.tiktok.com'):
+                        profile_url = href
+                        print(profile_url)
+                        username = href.split('@')[-1]
+                        print(username)
+                        followers_set.add(Follower(username, profile_url))
+
+            return followers_set
+
+        except Exception as e:
+            print(f"Не удалось загрузить список подписчиков: {e}")
+            import traceback
+            traceback.print_exc()
             return set()
+
+
