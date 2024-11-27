@@ -19,6 +19,7 @@ def main():
     follower_management_use_case = FollowerManagementUseCase(web_interface)
     message_sending_use_case = MessageSendingUseCase(web_interface)
 
+
     try:
         web_interface.navigate_to('https://www.tiktok.com/')
         cookie_manager.load_cookies(web_interface)
@@ -36,17 +37,17 @@ def main():
 
         while True:
             current_followers = follower_management_use_case.get_followers(username)
-            # new_followers = current_followers - known_followers
+            new_followers = current_followers - known_followers
 
-            # for follower in new_followers:
-            #     message_sending_use_case.send_message_to_follower(follower, message_text)
+            for follower in new_followers:
+                 message_sending_use_case.send_message_to_follower(follower, message_text)
 
             # Обновляем список известных подписчиков и сохраняем в файл
             known_followers = current_followers
             save_followers_to_file(known_followers)
 
             print("Проверка завершена. Ожидание перед следующей проверкой...")
-            time.sleep(300)  # Ждем 5 минут перед следующей проверкой
+            time.sleep(150)  # Ждем 5 минут перед следующей проверкой
 
     except KeyboardInterrupt:
         print("Завершение работы...")
